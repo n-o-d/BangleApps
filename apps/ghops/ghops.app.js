@@ -30,7 +30,7 @@ var running=false;
 var monitoringGPS = false;
 var hasGPSSignal = false;
 
-var curLocIsValid = false;
+var curLocIsValid = false; // whether the values in curLoc_grid are valid
 var curLoc_grid; // current cell
 var curLoc_subgrid; // coords of location!
 
@@ -53,7 +53,8 @@ var imageGhost = new Uint8Array([
 
 // ================================================
 
-var gridWidth = 200; // unit? degrees?
+var gridWidth = 3; // unit? degrees? mircominiarcsecondsw WTF?
+var locationVisibilityRange = gridWidth/3; // unit: subgrid?
 var gpsPrecisionFactor = 10000.0;
 
 class GridCoordinates {
@@ -510,6 +511,7 @@ function enteringNewCell() {
   curLocation = new Location();
   curLocation.generate(cellSeed, curLoc_grid);
   
+  // TODO: here ????
   if (curLocation.type != LocationType.empty) {
     Bangle.buzz();
   }
@@ -638,7 +640,7 @@ function startGame1() {
     
     curLocIsValid = false;
     
-    setTimeout(startGame2, 1000);
+    setTimeout(startGame2, 1000); // Waiting period to get some GPS signal...
     
     
   }
@@ -648,10 +650,12 @@ function startGame2() {
   
   running = true;
   
-  mainInterval = setInterval(mainLoop, 500); // TODO: freq?
-   
+  // init stuff for main loop here...
+  
   g.setColor(1,1,1);
   g.setFont("6x8", 2);
+  
+  mainInterval = setInterval(mainLoop, 500); // TODO: freq?
   
   /*
   setWatch(flyUp, BTN1, { repeat: true });
