@@ -1,4 +1,8 @@
-/* TODOs
+/* 
+
+GHOPS
+
+4dbg means 'for debugging' - can be removed for the release version
 
 
 === sytnax checker:
@@ -45,6 +49,13 @@ var curLong_gps; // last measured GPS coordinates; only valid if hasGPSSignal is
 var curLat_gps;
 
 var curLocation; // Location object
+var inv; // Inventory object
+
+var actionStack = []; // last action is exeuted in mainLoop; type: Action or subclass
+var btnActionMap = []; // array size max is 3 - which actions are currently mapped on the BTNs
+
+var coming1stTimeToAction = false;
+var comingBackToAction = false;
 
 var imageGhost = new Uint8Array([
       0b00111100,
@@ -204,6 +215,102 @@ const ItemType = {
   ghopFood : 1,
   psyEnergyCell: 2
 };
+  
+class Action {
+  
+  constructor(name, GUIName, action) {
+    this.actionName = name; // internal ID
+    this.actionGUIName = GUIName; //  shown in UI
+    this.actionFunction = action;
+  }
+  
+  getName() { return this.actionName; }
+  getGUIName() { return this.actionGUIName; }
+  getFunction() { this.actionFunction; }
+  
+  execute() { this.actionFunction(); }
+}
+
+class ItemAction extends Action {
+  
+  constructor(item, name, GUIName, action) {
+    
+    super(name, GUIName, action);
+    
+    this.targetItem = item; // always first parameter of actionFunction
+  }
+  
+  execute() { this.actionFunction(this.targetItem); }
+}
+
+class MenuAction extends Action { // NEEDED ???
+  
+  constructor(name, GUIName, action) {
+
+    super(name, GUIName, action);
+    
+  }
+  
+}
+
+// ================================================
+
+// take item which lies at the current location
+function takeItemFromLocation(item) {
+  
+  // TODO
+  // TODO
+  // TODO
+//    getItem() { return this.curItem; }
+}
+
+function examineItem(item) {
+  
+  // TODO
+  // TODO
+  
+}
+
+function dropItemFromInventory() {
+  
+  // TODO
+  // TODO
+  // TODO
+}
+
+function returnFromAction() {
+  
+  actionStack.pop();
+  comingBackToAction = true;
+}
+
+function showInventory() {
+    
+  g.clear(); 
+  
+var collectedActions = []; // type: Action or subclass
+  collectedActions.length = 0;
+  collectedActionsIndexShown = 0;
+  
+  // draw content...
+  
+  g.drawString("INVENTORY", 33,33);
+  
+  // fill collectedActions...
+  var backAction = new Action("AID_back", "<<", returnFromAction); 
+  collectedActions.push(backAction);
+  
+  
+  mapActionsToButtons(collectedActions, collectedActionsIndexShown);
+  displayCurButtonActions();
+  
+  g.flip();
+
+
+}
+
+
+// ================================================
 
 class Item {
 
@@ -211,9 +318,16 @@ class Item {
 		this.defined = false;
 		this.name = "";
 		this.namePlural = "";
+		this.description = "";
 		this.type = 0; // see ItemType
 		this.value1 = 0;
 		this.quantity = 1;
+      
+        this.actionsAtLoc = []; // array of ItemActions
+      // valid while the item lies at a location
+      
+        this.actionsInInv = []; // array of ItemActions
+      // vaid while the item is in the inventory
 	}
 	
 	generate(seed /*, TODO*/ ) { 
@@ -221,23 +335,46 @@ class Item {
         rnd.setSeed(seed+111);
 		
       
-       console.log("Item::generating");
-      // 4dbg
+        console.log("Item::generating");
+        // 4dbg
       
 		this.defined = true;
 		this.name = "Ghop food";
 		this.namePlural = "Ghop foods";
+		this.description = "Wanted by ghops!";
 		this.type = ItemType.ghopFood;
       
+      // These actions are valid when the item is found.
+        var takeAction = new ItemAction(this, "AID_take", "take", takeItemFromLocation);
+        this.actionsAtLoc.push(takeAction);
       
+        var examineAction = new ItemAction(this, "AID_examine", "examine", examineItem);
+        this.actionsAtLoc.push(examineAction);
+      
+        var dropAction = new ItemAction(this, "AID_drop", "drop", dropItemFromInventory);
+        this.actionsInInv.push(dropAction);
+      
+        this.actionsInInv.push(examineAction);
+      
+      //4dbg
+      console.log("  Item:#actLoc: " + this.actionsAtLoc.length.toString());
 	}
 	
     isDefined() { return this.defined; }
 	getName() { return this.name; }
 	getNamePlural() { return this.namePlural; }
+    getDescription() { return this.description; }
 	getType() { return this.type; }
 	getValue1() { return this.value1; }
 	getQuantity() { return this.quantity; }
+  
+	getActionsAtLoc() { return this.actionsAtLoc; }
+	getActionsInInv() { return this.actionsInInv; }
+  
+	deleteAllActions() { 
+      this.actionsAtLoc.length = 0;
+      this.actionsInInv.length = 0;
+    }
 	
 	// @returns true if type is the same
 	compareType(other) { 
@@ -257,7 +394,10 @@ class Inventory {
 		this.items = []; // bad: new Array();  https://www.w3schools.com/js/js_arrays.asp
 	}
 	
-	addItem(item) { this.items.push(item); }
+	addItem(item) {
+      
+      this.items.push(item); 
+    }
 	
 	removeItem(item) { 
 		var index = this.findIndexOf(item);
@@ -283,7 +423,7 @@ class Inventory {
 		for (var i = 0; i < arrayLength; i++) {
 			if (this.items[i].compareType(item)) {
 				count++;
-			} 
+			}
 		}
 		
 		return count;
@@ -357,6 +497,8 @@ class Location {
 		this.curNPC  = null; // new NPC();
 		this.curItem = null; // new Item();
 		
+        this.actions = []; //array of Action's
+      
 		// constants
 		
 		this.maxOffset_subgrid = 1; // for point of interest
@@ -371,6 +513,7 @@ class Location {
         this.type = LocationType.undefined;
 		this.curNPC  = null; // new NPC();
 		this.curItem = null; // new Item();
+        this.actions.length = 0;
     }
   
 	calcPointOfInterest_subgrid(coords_grid, seed) {
@@ -481,6 +624,10 @@ class Location {
 	removeItem() { this.curItem = null; }
 	removeNPC () { this.curNPC = null; }
 	
+	getActions() { return this.actions; }
+  
+	deleteAllActions() { this.actions.length = 0; }
+	
 }
 
 
@@ -501,6 +648,11 @@ function initAll() {
 
   curLocation = new Location(); // init as empty space!
   curLocation.type = LocationType.empty;
+  
+  inv = new Inventory();
+
+  var mainAction = new Action("describeLocation", "", displayMainScreen); 
+  actionStack.push(mainAction);
   
   showTitle();
   
@@ -615,10 +767,18 @@ function enteringNewCell() {
 
 function displayMainScreen() {
   
+  if (!coming1stTimeToAction && !comingBackToAction)
+    return;
+      
+      
   g.clear();
   
   var msg;
   var cellCoords = "cc";
+  
+  var collectedActions = []; // type: Action or subclass
+  //collectedActions.length = 0;
+  collectedActionsIndexShown = 0;
   
   if (hasGPSSignal && curLocation != null) {
     msg = "You see " + curLocation.getDescription() + ".\n";
@@ -633,13 +793,47 @@ function displayMainScreen() {
       } else {
         msg += "is a "+ presentItem.getName() + ".";
       }
-      msg += "\n"
+      msg += "\n";
 
+      var itemActions = presentItem.getActionsAtLoc();
+      
+      //4dbg
+      console.log("  presentItem:#actLoc: " + itemActions.length.toString());
+      
+      for (var aa = 0; aa < itemActions.length; aa++) {
+        collectedActions.push(itemActions[aa]);
+      }
+      
     } else {
-      msg += "."; // 4dbg
+      // ... ?
     }
     
     
+    var showInvAction = new MenuAction("AID_showInv", "inv", showInventory);
+    
+    collectedActions.push(showInventory);
+    
+    
+    // 4dbg
+    var indButton = 0;
+    for (var a2 = 0; a2 < collectedActions.length; a2++) {
+      var curAction = collectedActions[a2];
+      var actMsg = "BTN" + indButton.toString() + ": " + curAction.getName() + "\n";
+      console.log(actMsg);
+    }
+    
+      //4dbg
+      console.log("  :#collectedActions: " + collectedActions.length.toString());
+      
+      // 4dbg
+    
+    
+    
+    
+    // map to BTNs and display
+    
+    mapActionsToButtons(collectedActions, collectedActionsIndexShown);
+    displayCurButtonActions();
     
     // 4dbg: show cell coords:
     cellCoords = "Grid: " + curLoc_grid.toString() + "\n";
@@ -649,12 +843,109 @@ function displayMainScreen() {
     msg = "no signal :(";
   }
   
+  // 4dbg:
+  msg += "\n" + cellCoords;
+  
   g.drawString(msg, 1, 30);
   
-  g.setFont("6x8", 2);
-  g.drawString(cellCoords, 1, 100);
+  g.flip();
+}
+
+function fctTemplate() {
+  
+  g.clear();  
+  var collectedActions = []; // type: Action or subclass
+  //collectedActions.length = 0;
+  collectedActionsIndexShown = 0;
+  
+  // draw content...
+  // fill collectedActions...
+  
+  mapActionsToButtons(collectedActions, collectedActionsIndexShown);
+  displayCurButtonActions();
   
   g.flip();
+}
+
+function mapActionsToButtons(actions_i, indexShown_i) {
+  
+  btnActionMap.length = 0;
+  clearWatch();
+  
+  for (var aa = 0; aa < actions_i.length; aa++) {
+    var a = new Action("AID_none", "-", null);
+    btnActionMap.push(a);
+    // ALT II btnActionMap.push(null);
+  }
+
+  console.log("#btnActionMap on init: " + btnActionMap.length.toString()); // 4dbg
+  
+  console.log("#actions_i on init: " + actions_i.length.toString()); // 4dbg
+  
+  if (actions_i.length > 3 ) {
+    
+    // TODO 
+    
+  } else {
+   
+    for (var aa = 0; aa < actions_i.length; aa++) {
+      
+      switch(aa) {
+        case 0:
+          var watchID1 = setWatch(btn1Pressed, BTN1, { repeat: false });
+          btnActionMap[aa] = actions_i[aa];
+          
+          break;
+        case 1:
+          var watchID2 = ssetWatch(btn2Pressed, BTN2, { repeat: false });
+          btnActionMap[aa] = actions_i[aa];
+          break;
+        case 2:
+          var watchID3 = ssetWatch(btn3Pressed, BTN3, { repeat: false });
+          btnActionMap[aa] = actions_i[aa];
+          break;
+      }
+      
+      
+    }
+    
+  }
+  
+}
+
+function btn1Pressed() {
+  btnPressed(0);
+}
+
+function btn2Pressed() {
+  btnPressed(1);
+}
+
+function btn3Pressed() {
+  btnPressed(2);
+}
+
+function btnPressed(index) {
+  if (btnActionMap[index] != null) {
+    actionStack.push(btnActionMap[index].getFunction());
+    coming1stTimeToAction = true;
+  }
+}
+
+function displayCurButtonActions() {
+  
+  console.log("#ACTs: " + btnActionMap.length.toString()); // 4dbg
+  
+  for (var aa = 0; aa < btnActionMap.length; aa++) {
+    
+    if (btnActionMap[aa] != null) {
+      
+      var actionName = btnActionMap[aa].getGUIName();
+      console.log("ACT: " + actionName); // 4dbg
+      g.drawString(actionName,  W-40, 20 * aa*30);
+    }
+  }
+  
 }
 
 function calcDistance_GPS( TODO) {
@@ -725,14 +1016,18 @@ function mainLoop() {
     }
     
   } 
-    
-  displayMainScreen();
-    
   
-  //? g.setFontAlign(0,0); // center font
+  // execute CURRENT action!
+  if (actionStack.length > 0) {
+    var curAction = actionStack[actionStack.length-1];
+    curAction.execute();
+  } else {
+    // error 
+    console.log("*error* no action defined");
+  }
   
-  //g.drawString("loop", 30,30);
-  // ======
+  coming1stTimeToAction = false;
+  comingBackToAction = false;
   
   //g.flip();
 }
@@ -787,6 +1082,8 @@ function startGame2() {
   g.setFont("6x8", 2);
   
   mainInterval = setInterval(mainLoop, 500); // TODO: freq?
+  
+  coming1stTimeToAction = true;
   
   /*
   setWatch(flyUp, BTN1, { repeat: true });
