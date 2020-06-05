@@ -4,6 +4,8 @@ GHOPS
 
 4dbg means 'for debugging' - can be removed for the release version
 
+https://github.com/n-o-d/BangleApps/tree/master/apps/ghops
+
 
 === sytnax checker:
 https://jshint.com/  
@@ -228,7 +230,11 @@ class Action {
   getGUIName() { return this.actionGUIName; }
   getFunction() { this.actionFunction; }
   
-  execute() { this.actionFunction(); }
+  execute() { 
+    if (this.actionFunction != null) { 
+        this.actionFunction(); 
+    }
+  }
 }
 
 class ItemAction extends Action {
@@ -280,16 +286,22 @@ function dropItemFromInventory() {
 
 function returnFromAction() {
   
-  actionStack.pop();
+  console.log("<< returnFromAction - #actionStack: " + actionStack.length.toString());
+  
+  actionStack.pop(); // pops this action
+  actionStack.pop(); // pops the action which wants to go back
   comingBackToAction = true;
 }
 
 function showInventory() {
     
+  if (!coming1stTimeToAction && !comingBackToAction)
+    return;
+      
   g.clear(); 
   
-var collectedActions = []; // type: Action or subclass
-  collectedActions.length = 0;
+  var collectedActions = []; // type: Action or subclass
+  
   collectedActionsIndexShown = 0;
   
   // draw content...
@@ -297,7 +309,7 @@ var collectedActions = []; // type: Action or subclass
   g.drawString("INVENTORY", 33,33);
   
   // fill collectedActions...
-  var backAction = new Action("AID_back", "<<", returnFromAction); 
+  var backAction = new Action("AID_back", "back", returnFromAction); 
   collectedActions.push(backAction);
   
   
@@ -305,8 +317,6 @@ var collectedActions = []; // type: Action or subclass
   displayCurButtonActions();
   
   g.flip();
-
-
 }
 
 
@@ -372,8 +382,8 @@ class Item {
 	getActionsInInv() { return this.actionsInInv; }
   
 	deleteAllActions() { 
-      this.actionsAtLoc.length = 0;
-      this.actionsInInv.length = 0;
+      for (var aa3 = this.actionsAtLoc.length-1; aa3 >= 0; aa3--) { this.actionsAtLoc.pop(); }
+      for (var aa3 = this.actionsInInv.length-1; aa3 >= 0; aa3--) { this.actionsInInv.pop(); }
     }
 	
 	// @returns true if type is the same
@@ -513,7 +523,7 @@ class Location {
         this.type = LocationType.undefined;
 		this.curNPC  = null; // new NPC();
 		this.curItem = null; // new Item();
-        this.actions.length = 0;
+        for (var aa3 = this.actions.length-1; aa3 >= 0; aa3--) { this.actions.pop(); }
     }
   
 	calcPointOfInterest_subgrid(coords_grid, seed) {
@@ -626,7 +636,9 @@ class Location {
 	
 	getActions() { return this.actions; }
   
-	deleteAllActions() { this.actions.length = 0; }
+	deleteAllActions() { 
+      for (var aa3 = this.actions.length-1; aa3 >= 0; aa3--) { this.actions.pop(); }
+    }
 	
 }
 
@@ -769,15 +781,13 @@ function displayMainScreen() {
   
   if (!coming1stTimeToAction && !comingBackToAction)
     return;
-      
-      
+  
   g.clear();
   
   var msg;
   var cellCoords = "cc";
   
   var collectedActions = []; // type: Action or subclass
-  //collectedActions.length = 0;
   collectedActionsIndexShown = 0;
   
   if (hasGPSSignal && curLocation != null) {
@@ -801,7 +811,11 @@ function displayMainScreen() {
       console.log("  presentItem:#actLoc: " + itemActions.length.toString());
       
       for (var aa = 0; aa < itemActions.length; aa++) {
-        collectedActions.push(itemActions[aa]);
+        
+        //console.log("  pushing action No " + aa.toString() + "\n");
+        var anAction = itemActions[aa];
+        collectedActions.push(anAction);
+        
       }
       
     } else {
@@ -811,21 +825,20 @@ function displayMainScreen() {
     
     var showInvAction = new MenuAction("AID_showInv", "inv", showInventory);
     
-    collectedActions.push(showInventory);
+    collectedActions.push(showInvAction);
     
     
     // 4dbg
-    var indButton = 0;
     for (var a2 = 0; a2 < collectedActions.length; a2++) {
       var curAction = collectedActions[a2];
-      var actMsg = "BTN" + indButton.toString() + ": " + curAction.getName() + "\n";
+      var actMsg = "BTN" + a2.toString() + ": " + curAction.getName() + "\n";
       console.log(actMsg);
     }
     
-      //4dbg
-      console.log("  :#collectedActions: " + collectedActions.length.toString());
+    //4dbg
+    console.log("  :#collectedActions: " + collectedActions.length.toString());
       
-      // 4dbg
+    // 4dbg
     
     
     
@@ -853,9 +866,11 @@ function displayMainScreen() {
 
 function fctTemplate() {
   
+  if (!coming1stTimeToAction && !comingBackToAction)
+    return;
+      
   g.clear();  
   var collectedActions = []; // type: Action or subclass
-  //collectedActions.length = 0;
   collectedActionsIndexShown = 0;
   
   // draw content...
@@ -869,18 +884,23 @@ function fctTemplate() {
 
 function mapActionsToButtons(actions_i, indexShown_i) {
   
-  btnActionMap.length = 0;
   clearWatch();
   
+  // ALT I  btnActionMap.length = 0;  <<<=== not working!!!
+  for (var aa3 = btnActionMap.length-1; aa3 >= 0; aa3--) {
+    btnActionMap.pop();
+  }
+  
+  /* needed? TODO
   for (var aa = 0; aa < actions_i.length; aa++) {
     var a = new Action("AID_none", "-", null);
     btnActionMap.push(a);
     // ALT II btnActionMap.push(null);
   }
+  */
 
-  console.log("#btnActionMap on init: " + btnActionMap.length.toString()); // 4dbg
   
-  console.log("#actions_i on init: " + actions_i.length.toString()); // 4dbg
+  console.log("   mapActionsToButtons:  #actions_i: " + actions_i.length.toString()); // 4dbg
   
   if (actions_i.length > 3 ) {
     
@@ -892,25 +912,45 @@ function mapActionsToButtons(actions_i, indexShown_i) {
       
       switch(aa) {
         case 0:
-          var watchID1 = setWatch(btn1Pressed, BTN1, { repeat: false });
-          btnActionMap[aa] = actions_i[aa];
-          
+          {
+            var watchID1 = setWatch(btn1Pressed, BTN1, { repeat: false });
+            var act1 = actions_i[aa];
+             // ALT I btnActionMap[aa] = act1;
+            btnActionMap.push(act1); // ALT II
+
+            console.log("     mapping BTN " + aa.toString() + " to " + act1.getName()); // 4dbg
+            //console.log("     #btnActionMap: " + btnActionMap.length.toString()); // 4dbg
+          }
           break;
         case 1:
-          var watchID2 = ssetWatch(btn2Pressed, BTN2, { repeat: false });
-          btnActionMap[aa] = actions_i[aa];
+          {
+            var watchID2 = setWatch(btn2Pressed, BTN2, { repeat: false });
+            var act2 = actions_i[aa];
+             // ALT I btnActionMap[aa] = act2;
+            btnActionMap.push(act2); // ALT II
+            console.log("     mapping BTN " + aa.toString() + " to " + act2.getName()); // 4dbg
+            //console.log("     #btnActionMap: " + btnActionMap.length.toString()); // 4dbg
+          }
           break;
+          
         case 2:
-          var watchID3 = ssetWatch(btn3Pressed, BTN3, { repeat: false });
-          btnActionMap[aa] = actions_i[aa];
+          {
+            var watchID3 = setWatch(btn3Pressed, BTN3, { repeat: false });
+            var act3 = actions_i[aa];
+             // ALT I btnActionMap[aa] = act3;
+            btnActionMap.push(act3); // ALT II
+            console.log("     mapping BTN " + aa.toString() + " to " + act3.getName()); // 4dbg
+            //console.log("     #btnActionMap: " + btnActionMap.length.toString()); // 4dbg
+          }
           break;
       }
       
-      
-    }
+    } // for (var aa = 0; aa < actions_i.length; aa++)
     
   }
   
+  //var num = btnActionMap.length;
+  //console.log("   #btnActionMap after init: " + num.toString() + "\n"); // 4dbg
 }
 
 function btn1Pressed() {
@@ -926,23 +966,28 @@ function btn3Pressed() {
 }
 
 function btnPressed(index) {
-  if (btnActionMap[index] != null) {
-    actionStack.push(btnActionMap[index].getFunction());
-    coming1stTimeToAction = true;
+  if (index < btnActionMap.length) {
+    if (btnActionMap[index] != null) {
+      var curAction = btnActionMap[index];
+      actionStack.push(curAction);
+      coming1stTimeToAction = true;
+      
+      console.log("   >> btnPressed - #actionStack: " + actionStack.length.toString());
+    }
   }
 }
 
 function displayCurButtonActions() {
   
-  console.log("#ACTs: " + btnActionMap.length.toString()); // 4dbg
+  //console.log("#ACTs: " + btnActionMap.length.toString()); // 4dbg
   
   for (var aa = 0; aa < btnActionMap.length; aa++) {
     
     if (btnActionMap[aa] != null) {
       
       var actionName = btnActionMap[aa].getGUIName();
-      console.log("ACT: " + actionName); // 4dbg
-      g.drawString(actionName,  W-40, 20 * aa*30);
+      console.log("ACTION: " + actionName); // 4dbg
+      g.drawString(actionName,  W-60, 10 + aa*60);
     }
   }
   
@@ -1017,17 +1062,23 @@ function mainLoop() {
     
   } 
   
+  var resetBackToAction = false;
+  if (comingBackToAction)
+      resetBackToAction = true;
+  
   // execute CURRENT action!
   if (actionStack.length > 0) {
     var curAction = actionStack[actionStack.length-1];
     curAction.execute();
+    
   } else {
     // error 
     console.log("*error* no action defined");
   }
   
   coming1stTimeToAction = false;
-  comingBackToAction = false;
+  if (resetBackToAction) 
+    comingBackToAction = false;
   
   //g.flip();
 }
