@@ -264,18 +264,89 @@ class MenuAction extends Action { // NEEDED ???
 // take item which lies at the current location
 function takeItemFromLocation(item) {
   
-  // TODO
-  // TODO
-  // TODO
-//    getItem() { return this.curItem; }
+  if (!coming1stTimeToAction && !comingBackToAction)
+    return;
+      
+  g.clear(); 
+  
+  var collectedActions = []; // type: Action or subclass
+  
+  collectedActionsIndexShown = 0;
+     
+  // draw content...
+  
+  var msg = "";
+  
+  if (curLocation.isItemPresent()) {
+      
+    var presentItem = curLocation.getItem();
+  
+    msg = "I took the ";
+    if (presentItem.getQuantity() > 1) {
+      msg += presentItem.getQuantity()+ " " + presentItem.getNamePlural();
+    } else {
+      msg += presentItem.getName();
+    }
+    msg += ".\n\n";
+    msg += presentItem.getDescription() + "\n";
+    
+    inv.addItem(presentItem);
+    curLocation.removeItem(presentItem);
+    
+  } else {
+    // should never happen
+    msg = "There's is nothing here.\n";
+  }
+  
+  g.drawString(msg, 5 , 30)
+
+  // fill collectedActions...
+  var backAction = new Action("AID_back", "back", returnFromAction); 
+  collectedActions.push(backAction);
+    
+  mapActionsToButtons(collectedActions, collectedActionsIndexShown);
+  displayCurButtonActions();
+  
+  g.flip();
 }
+
+// ================================================
 
 function examineItem(item) {
   
-  // TODO
-  // TODO
+  if (!coming1stTimeToAction && !comingBackToAction)
+    return;
+      
+  g.clear(); 
   
+  var collectedActions = []; // type: Action or subclass
+  
+  collectedActionsIndexShown = 0;
+     
+  // draw content...
+  
+  var msg = "";
+  
+  if (curLocation.isItemPresent()) {
+      
+    var presentItem = curLocation.getItem();
+  
+    msg = presentItem.getDescription() + "\n";
+  }
+
+  g.drawString(msg, 5 , 30)
+
+  // fill collectedActions...
+  var backAction = new Action("AID_back", "back", returnFromAction); 
+  collectedActions.push(backAction);
+    
+  mapActionsToButtons(collectedActions, collectedActionsIndexShown);
+  displayCurButtonActions();
+  
+  g.flip();
 }
+
+// ================================================
 
 function dropItemFromInventory() {
   
@@ -283,6 +354,8 @@ function dropItemFromInventory() {
   // TODO
   // TODO
 }
+
+// ================================================
 
 function returnFromAction() {
   
@@ -292,6 +365,8 @@ function returnFromAction() {
   actionStack.pop(); // pops the action which wants to go back
   comingBackToAction = true;
 }
+
+// ================================================
 
 function showInventory() {
     
@@ -306,8 +381,29 @@ function showInventory() {
   
   // draw content...
   
-  g.drawString("INVENTORY", 33,33);
+  g.drawString("Inventory:\n", 5 , 5);
   
+  var msg = "";
+  
+  if (inv.items.length == 0) {
+    msg += "is empty";
+  } else {
+    for (var ii = 0; ii < inv.items.length; ii++) {
+      var curItem = inv.items[ii];
+      if (curItem != null) {
+        var num = curItem.getQuantity();
+        if (num == 1) {
+          msg += curItem.getName() + "\n";
+        } else {
+          msg += num.toString() + " " + curItem.getNamePlural() + "\n";
+        }
+      }
+      // TODO: handle displaying many items on several pages
+    } // for (var ii = 0; ii < inv.items.length; ii++) 
+  }
+  
+  g.drawString(msg, 5 , 25);
+    
   // fill collectedActions...
   var backAction = new Action("AID_back", "back", returnFromAction); 
   collectedActions.push(backAction);
