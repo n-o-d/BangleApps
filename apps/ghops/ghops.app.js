@@ -2,6 +2,15 @@
 
 GHOPS
 
+modified: 2020-06-16
+
+
+=== TODOs
+
+O  dropItemFromInventory
+
+
+===
 4dbg means 'for debugging' - can be removed for the release version
 
 https://github.com/n-o-d/BangleApps/tree/master/apps/ghops
@@ -279,19 +288,26 @@ function takeItemFromLocation(item) {
   
   if (curLocation.isItemPresent()) {
       
-    var presentItem = curLocation.getItem();
-  
-    msg = "I took the ";
-    if (presentItem.getQuantity() > 1) {
-      msg += presentItem.getQuantity()+ " " + presentItem.getNamePlural();
+    var numItemsInInv = inv.items.length;
+    if (inv.items.length >= inv.getMaxNumItems()) {
+      msg = "Cannot take.\nInventory is full.";
     } else {
-      msg += presentItem.getName();
+      
+      var presentItem = curLocation.getItem();
+
+      msg = "I took the ";
+      if (presentItem.getQuantity() > 1) {
+        msg += presentItem.getQuantity()+ " " + presentItem.getNamePlural();
+      } else {
+        msg += presentItem.getName();
+      }
+      msg += ".\n\n";
+      msg += presentItem.getDescription() + "\n";
+
+      inv.addItem(presentItem);
+      curLocation.removeItem(presentItem);
     }
-    msg += ".\n\n";
-    msg += presentItem.getDescription() + "\n";
-    
-    inv.addItem(presentItem);
-    curLocation.removeItem(presentItem);
+
     
   } else {
     // should never happen
@@ -348,11 +364,141 @@ function examineItem(item) {
 
 // ================================================
 
-function dropItemFromInventory() {
+function dropItemFromInventory(item) {
   
-  // TODO
-  // TODO
-  // TODO
+  if (!coming1stTimeToAction && !comingBackToAction)
+    return;
+      
+  g.clear(); 
+  
+  var collectedActions = []; // type: Action or subclass
+  
+  collectedActionsIndexShown = 0;
+  
+  var msg = "";
+
+  // check item
+  if (!inv.contains(item)) {
+    
+    msg = "Invalid item.";
+    
+  } else {
+
+    var destroyItem = false;
+
+    if (curLocation == null || curLocation.getType() == LocationType.empty) {
+
+      destroyItem = true;
+
+    } else {
+
+      if (curLocation.isItemPresent()) {
+
+        // place is taken - just destroy item in inv
+        destroyItem = true;
+
+      } else {
+        // drop to current location
+        destroyItem = false;
+      }
+    }
+
+    if (destroyItem) {
+      // TODO : confirm by player?
+
+      if (item.getQuantity() > 1) {
+        msg += item.getQuantity()+ " " + item.getNamePlural() + "\nwere destroyed.";
+      
+      } else {
+        msg += item.getName() + "\nwas destroyed.";
+      }
+      
+      inv.removeItem();
+      
+      // TODO: delete item;
+
+    } else {
+
+      // drop to current location
+
+      if (item.getQuantity() > 1) {
+        msg += item.getQuantity()+ " " + item.getNamePlural() + "\nwere dropped.";
+      
+      } else {
+        msg += item.getName() + "\nwas dropped.";
+      }
+    }
+
+    var numItemsInInv = inv.items.length;
+    if (numItemsInInv == 0) {
+      msg = "\nInventory is now empty.";
+    }
+  }
+    
+  g.drawString(msg, 5 , 30)
+
+  // fill collectedActions...
+  var backAction = new Action("AID_back", "back", returnFromAction); 
+  collectedActions.push(backAction);
+    
+  mapActionsToButtons(collectedActions, collectedActionsIndexShown);
+  displayCurButtonActions();
+  
+  g.flip();
+}
+
+// ================================================
+
+function showItem(item) {
+  
+  if (!coming1stTimeToAction && !comingBackToAction)
+    return;
+      
+  g.clear();
+  
+  var collectedActions = []; // type: Action or subclass
+  collectedActionsIndexShown = 0;
+  
+  // draw content...
+  var num = item.getQuantity();
+  if (num == 1) {
+    msg += item.getName():
+  } else {
+    msg += num.toString() + " " + item.getNamePlural();
+  }
+  msg += "\n";
+  msg += item.getDescription() + "\n";
+  
+  // fill collectedActions...
+  
+  var backAction = new Action("AID_back", "back", returnFromAction);
+  collectedActions.push(backAction);
+
+  var inInvActions = item.getActionsInInv();
+  
+  for (var aa = 0; aa < inInvActions.length; aa++) {
+
+    var anAction = inInvActions[aa];
+    collectedActions.push(anAction);
+
+  }
+  
+  mapActionsToButtons(collectedActions, collectedActionsIndexShown);
+  displayCurButtonActions();
+  
+  g.flip();
+}
+
+// ================================================
+
+function selectNextItem() {
+  
+  inventorySelectedItem++;
+  if (inventorySelectedItem >= inv.items.length)
+      inventorySelectedItem = 0;
+      
+  actionStack.pop(); // pops this action
+  comingBackToAction = true;
 }
 
 // ================================================
@@ -368,12 +514,29 @@ function returnFromAction() {
 
 // ================================================
 
+function nop() {
+  
+  actionStack.pop(); // pops this action
+  //comingBackToAction = true;
+}
+
+// ================================================
+
 function showInventory() {
     
   if (!coming1stTimeToAction && !comingBackToAction)
     return;
       
   g.clear(); 
+  
+  if (coming1stTimeToAction) {
+    if (inv.items.length == 0)
+      inventorySelectedItem = -1;
+    else
+      inventorySelectedItem = 0;
+  }
+  var selectedItem = null;
+  
   
   var collectedActions = []; // type: Action or subclass
   
@@ -388,9 +551,18 @@ function showInventory() {
   if (inv.items.length == 0) {
     msg += "is empty";
   } else {
+  
     for (var ii = 0; ii < inv.items.length; ii++) {
       var curItem = inv.items[ii];
       if (curItem != null) {
+        
+        if (ii == inventorySelectedItem) {
+          msg += "> ";
+          selectedItem = curItem;
+        } else {
+          msg += "  ";
+        }
+        
         var num = curItem.getQuantity();
         if (num == 1) {
           msg += curItem.getName() + "\n";
@@ -405,16 +577,28 @@ function showInventory() {
   g.drawString(msg, 5 , 25);
     
   // fill collectedActions...
+  
+  //var noAction = new Action("AID_nop", "", nop); // just keep this slot taken
   var backAction = new Action("AID_back", "back", returnFromAction); 
+  var showItemAction = new ItemAction(selectedItem, "AID_showItem", "show", showItem);
+  var selectNextItemAction = new Action("AID_nextItem", "next", selectNextItem); 
+  
   collectedActions.push(backAction);
-  
-  
+  if (inv.items.length == 0) {
+    //collectedActions.push(noAction);
+    //collectedActions.push(noAction);
+  } else if (inv.items.length == 1) {
+    collectedActions.push(showItemAction);
+  } else {
+    collectedActions.push(showItemAction);
+    collectedActions.push(selectNextItemAction);
+  }
+    
   mapActionsToButtons(collectedActions, collectedActionsIndexShown);
   displayCurButtonActions();
   
   g.flip();
 }
-
 
 // ================================================
 
@@ -450,7 +634,7 @@ class Item {
 		this.description = "Wanted by ghops!";
 		this.type = ItemType.ghopFood;
       
-      // These actions are valid when the item is found.
+        // These actions are valid when the item is found.
         var takeAction = new ItemAction(this, "AID_take", "take", takeItemFromLocation);
         this.actionsAtLoc.push(takeAction);
       
@@ -461,6 +645,9 @@ class Item {
         this.actionsInInv.push(dropAction);
       
         this.actionsInInv.push(examineAction);
+      
+        // TODO: use action
+      
       
       //4dbg
       console.log("  Item:#actLoc: " + this.actionsAtLoc.length.toString());
@@ -522,6 +709,25 @@ class Inventory {
 		return -1;
 	}
 	
+	// returns false if nothing is found
+	contains(item) { 
+		var i = this.findIndexOf(item);
+        if (i != -1)
+		  return true;
+        else
+          return false;
+	}
+	
+	// returns an item or null if index is invalid
+	getItemAtIndex(index) {
+		var arrayLength = this.items.length;
+		if (index >= 0 && index < arrayLength) {
+		  return this.items[index];
+		} else {
+          return null;
+        }
+    }
+  
 	countItemOfType(item) { 
 		var count = 0;
 		
@@ -534,6 +740,10 @@ class Inventory {
 		
 		return count;
 	}
+  
+    getMaxNumItems() {
+      return 5; // TODO <<<<<<<<<<<<<<<<
+    }
 }
 	
 // ================================================
@@ -613,6 +823,8 @@ class Location {
 	
 	// functions
 	
+    getType() { return this.type; }
+  
     deleteAll() {
       
       // needed?
